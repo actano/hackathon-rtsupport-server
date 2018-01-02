@@ -3,8 +3,19 @@ package main
 import (
 	"fmt"
 	"github.com/gorilla/websocket"
+	"github.com/mitchellh/mapstructure"
 	"net/http"
 )
+
+type Message struct {
+	Name string      `json:"name"`
+	Data interface{} `json:"data"`
+}
+
+type Channel struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -25,15 +36,37 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for {
-		msgType, msg, err := socket.ReadMessage()
-		if err != nil {
+		var inMesssage Message
+		var outMessage Message
+		if err := socket.ReadJSON(&inMesssage); err != nil {
 			fmt.Println(err)
-			return
+			break
 		}
-		fmt.Println(string(msg))
-		if err = socket.WriteMessage(msgType, msg); err != nil {
-			fmt.Println(err)
-			return
+
+		fmt.Printf("%#v\n", inMesssage)
+		switch inMesssage.Name {
+		case "channel add":
+			err := addChannel(inMesssage.Data)
+			if err != nil {
+				outMessage = Message{"error", err}
+				if err := socket.WriteJSON(outMessage); err != nil {
+					fmt.Println(err)
+					break
+				}
+			}
 		}
+
 	}
+}
+
+func addChannel(data interface{}) error {
+	var channel Channel
+
+	err := mapstructure.Decode(data, &channel)
+	if err != nil {
+		return err
+	}
+	channel.Id = "1"
+	fmt.Printf("%#v\n", channel)
+	return nil
 }
